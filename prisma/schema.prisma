@@ -1,0 +1,133 @@
+// Nexus Core Multi-Entity Relational Schema
+// Assignment 2: Relational Data Seeding, Transactional Notifications & Secure Endpoints
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Multi-Tenant Cloud Organization Unit
+model Organization {
+  id            String        @id @default(cuid())
+  name          String
+  slug          String        @unique
+  tier          String        @default("ENTERPRISE") // ENTERPRISE, PRO, STARTER
+  creditBalance Float         @default(50000.0)
+  region        String        @default("us-east-va")
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  users         User[]
+  transactions  Transaction[]
+}
+
+// Account User with Role-Based Access Control
+model User {
+  id             String        @id @default(cuid())
+  email          String        @unique
+  name           String
+  role           String        @default("MEMBER") // ADMIN, MEMBER, GUEST
+  status         String        @default("ACTIVE") // ACTIVE, SUSPENDED, PENDING
+  avatar         String?
+  organizationId String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  transactions   Transaction[]
+  auditLogs      AuditLog[]
+
+  @@index([organizationId])
+  @@index([role])
+}
+
+// Financial Ledger & Infrastructure Allocation Records
+model Transaction {
+  id             String        @id @default(cuid())
+  referenceCode  String        @unique
+  amount         Float
+  currency       String        @default("USD")
+  status         String        @default("COMPLETED") // COMPLETED, PENDING, FAILED
+  type           String        @default("INFRA_ALLOCATION") // INFRA_ALLOCATION, WALLET_FUND, API_CREDIT, TRANSFER
+  description    String
+  metadata       String?       // JSON string
+  userId         String
+  organizationId String
+  createdAt      DateTime      @default(now())
+
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([status])
+}
+
+// Immutable Security & Mutation Audit Logs
+model AuditLog {
+  id             String        @id @default(cuid())
+  action         String        // TRANSACTION_CREATED, ROLE_ELEVATED, USER_SUSPENDED, SEED_EXECUTED, etc.
+  entityType     String        // TRANSACTION, USER, SYSTEM, WEBHOOK
+  entityId       String
+  ipAddress      String        @default("127.0.0.1")
+  userAgent      String        @default("Mozilla/5.0")
+  severity       String        @default("INFO") // INFO, WARNING, CRITICAL
+  details        String?       // JSON string
+  userId         String?
+  createdAt      DateTime      @default(now())
+
+  user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([severity])
+  @@index([action])
+}
+
+// Resend Transactional Email Delivery & Lifecycle Log
+model EmailDeliveryLog {
+  id             String        @id @default(cuid())
+  resendId       String?       @unique
+  recipient      String
+  subject        String
+  templateType   String        // TRANSACTION_RECEIPT, SECURITY_ALERT, ROLE_ELEVATION, ORG_INVITE
+  status         String        @default("SENT") // PENDING, SENT, DELIVERED, BOUNCED, OPENED, FAILED
+  bounceReason   String?
+  eventsCount    Int           @default(1)
+  metadata       String?       // JSON string
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([recipient])
+  @@index([status])
+  @@index([templateType])
+}
+
+// Webhook Ingestion Events (Resend, Edge Proxies, External Gateways)
+model WebhookEvent {
+  id             String        @id @default(cuid())
+  provider       String        @default("RESEND")
+  eventType      String        // email.sent, email.delivered, email.bounced, email.opened
+  payload        String        // Raw JSON payload
+  signature      String?
+  status         String        @default("PROCESSED") // PROCESSED, REJECTED, PENDING
+  processedAt    DateTime?
+  createdAt      DateTime      @default(now())
+
+  @@index([provider])
+  @@index([eventType])
+}
+
+// Telemetry & Edge Metric Logging
+model SystemMetric {
+  id             String        @id @default(cuid())
+  metricKey      String
+  value          Float
+  unit           String
+  timestamp      DateTime      @default(now())
+
+  @@index([metricKey])
+}
